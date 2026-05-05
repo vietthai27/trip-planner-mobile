@@ -30,6 +30,30 @@ export default function HomeScreen({ navigation }) {
           </Button>
 
           <Button
+            mode="contained-tonal"
+            onPress={() => navigation.navigate("Trips")}
+            style={{ marginTop: 12 }}
+          >
+            Trips
+          </Button>
+
+          <Button
+            mode="contained-tonal"
+            onPress={() => navigation.navigate("TripStages")}
+            style={{ marginTop: 12 }}
+          >
+            Trip Stages
+          </Button>
+
+          <Button
+            mode="contained-tonal"
+            onPress={() => navigation.navigate("TripSpendings")}
+            style={{ marginTop: 12 }}
+          >
+            Trip Spendings
+          </Button>
+
+          <Button
             mode="outlined"
             onPress={() => dispatch(logout())}
             style={{ marginTop: 12 }}
