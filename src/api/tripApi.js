@@ -4,6 +4,7 @@ const unwrap = (response) => response.data;
 
 export const listTripsApi = async () => unwrap(await axiosClient.get("/trips"));
 export const listMyTripsApi = async () => unwrap(await axiosClient.get("/trips/me"));
+export const listTripSelectableUsersApi = async () => unwrap(await axiosClient.get("/trips/users"));
 export const listTripUsersApi = async (tripId) => unwrap(await axiosClient.get(`/trips/${tripId}/users`));
 export const getTripApi = async (id) => unwrap(await axiosClient.get(`/trips/${id}`));
 export const createTripApi = async (data) => unwrap(await axiosClient.post("/trips", data));

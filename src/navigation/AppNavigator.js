@@ -8,6 +8,7 @@ import ProfileScreen from "../screens/ProfileScreen";
 import TripFormScreen from "../screens/TripFormScreen";
 import TripSpendingsScreen from "../screens/TripSpendingsScreen";
 import TripStagesScreen from "../screens/TripStagesScreen";
+import TripTimelineScreen from "../screens/TripTimelineScreen";
 import { logout } from "../store/authSlice";
 
 const Stack = createNativeStackNavigator();
@@ -65,6 +66,7 @@ export default function AppNavigator() {
       <Stack.Screen name="Profile" component={ProfileScreen} options={{ title: "Profile" }} />
       <Stack.Screen name="AddTrip" component={TripFormScreen} options={{ title: "Add Trip" }} />
       <Stack.Screen name="EditTrip" component={TripFormScreen} options={{ title: "Edit Trip" }} />
+      <Stack.Screen name="TripTimeline" component={TripTimelineScreen} options={{ title: "Trip Timeline" }} />
       <Stack.Screen name="TripStages" component={TripStagesScreen} options={{ title: "Trip Stages" }} />
       <Stack.Screen name="TripSpendings" component={TripSpendingsScreen} options={{ title: "Trip Spendings" }} />
     </Stack.Navigator>

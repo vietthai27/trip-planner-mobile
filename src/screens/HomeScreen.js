@@ -1,9 +1,22 @@
 import React, { useEffect, useState } from "react";
-import { Platform, ScrollView, StyleSheet, View } from "react-native";
-import DateTimePicker, { DateTimePickerAndroid } from "@react-native-community/datetimepicker";
+import { ScrollView, StyleSheet, View } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
-import { Button, Card, Divider, HelperText, IconButton, Text, TextInput } from "react-native-paper";
+import { Button, Card, HelperText, IconButton, Text } from "react-native-paper";
 import { useDispatch, useSelector } from "react-redux";
+import DetailRow from "../components/home/DetailRow";
+import InfoPill from "../components/home/InfoPill";
+import SectionPanel from "../components/home/SectionPanel";
+import SpendingCard from "../components/home/SpendingCard";
+import SpendingForm from "../components/home/SpendingForm";
+import StageForm from "../components/home/StageForm";
+import {
+  createEmptySpendingForm,
+  createEmptyStageForm,
+  formatAmount,
+  formatDateTimeText,
+  formatValue,
+  getStageTime
+} from "../components/home/homeFormatters";
 import {
   createTripSpendingForStage,
   createTripSpendingForTrip,
@@ -15,272 +28,7 @@ import {
   fetchTripStages,
   fetchTripUsers
 } from "../store/tripsSlice";
-import { MaterialIcons } from '@expo/vector-icons'; // or react-native-vector-iconsimport { MaterialIcons } from '@expo/vector-icons'; // or react-native-vector-icons
-
-const createEmptyStageForm = () => ({
-  name: "",
-  startTime: "",
-  endTime: "",
-  location: "",
-  activity: ""
-});
-
-const createEmptySpendingForm = () => ({
-  name: "",
-  amount: "",
-  userId: null,
-  tripSpendingType: "VEHICLE",
-  includedUserIds: []
-});
-
-const formatValue = (value) => {
-  if (value == null || value === "") {
-    return "-";
-  }
-
-  return String(value);
-};
-
-const getTripUsers = (trip) => {
-  if (!Array.isArray(trip?.users) || trip.users.length === 0) {
-    return "-";
-  }
-
-  return trip.users.map((user) => user?.username).filter(Boolean).join(", ") || "-";
-};
-
-function formatDateTimeText(isoString) {
-  const date = new Date(isoString);
-
-  const pad = (n) => String(n).padStart(2, '0');
-
-  return `${pad(date.getDate())}/${pad(date.getMonth() + 1)}/${date.getFullYear()} ` +
-    `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
-}
-
-const getSpendingUsers = (spending) => {
-  if (!Array.isArray(spending?.includedUsers) || spending.includedUsers.length === 0) {
-    return "-";
-  }
-
-  return spending.includedUsers.map((user) => user?.username).filter(Boolean).join(", ") || "-";
-};
-
-const formatAmount = (value) => {
-  const amount = Number(value);
-
-  if (!Number.isFinite(amount)) {
-    return formatValue(value);
-  }
-
-  return amount.toLocaleString();
-};
-
-const getStageTime = (stage) =>
-  `${formatValue(stage?.startTime)} to ${formatValue(stage?.endTime)}`;
-
-const toPickerDate = (value) => {
-  const date = value ? new Date(value) : new Date();
-
-  if (Number.isNaN(date.getTime())) {
-    return new Date();
-  }
-
-  return date;
-};
-
-const formatDateTime = (value) => {
-  if (!value) {
-    return "Select date and time";
-  }
-
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-
-  return date.toLocaleString();
-};
-
-const toDateTimeLocalValue = (value) => {
-  if (!value) {
-    return "";
-  }
-
-  const date = toPickerDate(value);
-  const timezoneOffset = date.getTimezoneOffset() * 60000;
-
-  return new Date(date.getTime() - timezoneOffset).toISOString().slice(0, 16);
-};
-
-const fromDateTimeLocalValue = (value) => {
-  if (!value) {
-    return "";
-  }
-
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return "";
-  }
-
-  return date.toISOString();
-};
-
-function DateTimeField({ label, value, onChange }) {
-  const [pickerMode, setPickerMode] = useState(null);
-
-  const hidePicker = () => setPickerMode(null);
-
-  const setSelectedValue = (mode, event, selectedDate) => {
-    hidePicker();
-
-    if (event?.type === "dismissed" || !selectedDate) {
-      return;
-    }
-
-    const currentDate = toPickerDate(value);
-    const nextDate = new Date(currentDate);
-
-    if (mode === "date") {
-      nextDate.setFullYear(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate());
-    } else {
-      nextDate.setHours(selectedDate.getHours(), selectedDate.getMinutes(), 0, 0);
-    }
-
-    onChange(nextDate.toISOString());
-  };
-
-  const openPicker = (mode) => {
-    if (Platform.OS === "android") {
-      DateTimePickerAndroid.open({
-        value: toPickerDate(value),
-        mode,
-        display: mode === "time" ? "clock" : "calendar",
-        onChange: (event, selectedDate) => setSelectedValue(mode, event, selectedDate)
-      });
-      return;
-    }
-
-    setPickerMode(mode);
-  };
-
-  const showDatePicker = () => openPicker("date");
-  const showTimePicker = () => openPicker("time");
-
-  if (Platform.OS === "web") {
-    return (
-      <View style={{ marginTop: 10 }}>
-        <Text style={{ color: "#59616d", marginBottom: 6 }}>{label}</Text>
-        <input
-          type="datetime-local"
-          value={toDateTimeLocalValue(value)}
-          onChange={(event) => onChange(fromDateTimeLocalValue(event.target.value))}
-          style={{
-            borderColor: "#79747e",
-            borderRadius: 3,
-            borderStyle: "solid",
-            borderWidth: 1,
-            boxSizing: "border-box",
-            fontSize: 16,
-            height: 48,
-            padding: "0 12px",
-            width: "100%"
-          }}
-        />
-      </View>
-    );
-  }
-
-  return (
-    <View style={{ marginTop: 10 }}>
-      <Text style={{ color: "#59616d", marginBottom: 6 }}>{label}</Text>
-      <View style={{ flexDirection: "row", gap: 10 }}>
-        <Button mode="outlined" onPress={showDatePicker} style={{ flex: 1 }}>
-          {formatDateTime(value)}
-        </Button>
-        <Button mode="contained-tonal" onPress={showTimePicker}>
-          Time
-        </Button>
-      </View>
-      {pickerMode ? (
-        <DateTimePicker
-          value={toPickerDate(value)}
-          mode={pickerMode}
-          display="default"
-          onChange={(event, selectedDate) => setSelectedValue(pickerMode, event, selectedDate)}
-        />
-      ) : null}
-    </View>
-  );
-}
-
-function InfoPill({ label, value, tone = "neutral" }) {
-  const isCustomValue = React.isValidElement(value);
-
-  return (
-    <View style={[styles.infoPill, styles[`${tone}Pill`]]}>
-      <Text
-        variant="labelSmall"
-        style={[styles.infoPillLabel, styles[`${tone}PillLabel`]]}
-      >
-        {label}
-      </Text>
-
-      {isCustomValue ? (
-        value
-      ) : (
-        <Text variant="labelMedium" style={styles.infoPillValue} numberOfLines={1}>
-          {formatValue(value)}
-        </Text>
-      )}
-    </View>
-  );
-}
-
-function DetailRow({ label, value }) {
-  return (
-    <View style={styles.detailRow}>
-      <Text variant="labelMedium" style={styles.detailLabel}>
-        {label}
-      </Text>
-      <Text style={styles.detailValue}>{formatValue(value)}</Text>
-    </View>
-  );
-}
-
-function SectionPanel({ title, tone = "neutral", children }) {
-  return (
-    <View style={[styles.sectionPanel, styles[`${tone}Panel`]]}>
-      <Text variant="labelLarge" style={[styles.sectionTitle, styles[`${tone}Title`]]}>
-        {title}
-      </Text>
-      {children}
-    </View>
-  );
-}
-
-function SpendingCard({ spending, tone = "trip" }) {
-  return (
-    <View style={[styles.spendingCard, styles[`${tone}SpendingCard`]]}>
-      <View style={styles.spendingHeader}>
-        <View style={[styles.spendingDot, styles[`${tone}Dot`]]} />
-        <Text variant="labelLarge" style={styles.spendingName}>
-          {formatValue(spending?.name)}
-        </Text>
-        <Text variant="labelLarge" style={styles.spendingAmount}>
-          {formatAmount(spending?.amount)}
-        </Text>
-      </View>
-      <View style={styles.spendingMetaGrid}>
-        <DetailRow label="Type" value={spending?.tripSpendingType} />
-        <DetailRow label="Paid by" value={spending?.user?.username} />
-        <DetailRow label="Included" value={getSpendingUsers(spending)} />
-      </View>
-    </View>
-  );
-}
+import { MaterialIcons } from "@expo/vector-icons";
 
 export default function HomeScreen({ navigation }) {
   const dispatch = useDispatch();
@@ -567,7 +315,6 @@ export default function HomeScreen({ navigation }) {
 
   const renderSpendingForm = ({ formKey, tripId, onSubmit, loading, error, submitLabel }) => {
     const form = spendingFormsByKey[formKey] || createEmptySpendingForm();
-    const selectedType = getSelectedSpendingType(form);
     const tripUsers = usersByTripId[tripId] || [];
     const usersLoading = usersLoadingByTripId[tripId] === true;
     const usersError = usersErrorByTripId[tripId];
@@ -575,106 +322,26 @@ export default function HomeScreen({ navigation }) {
     const selectedPayerId = getSelectedPayerId(form, tripUsers);
 
     return (
-      <SectionPanel title="New Spending" tone="form">
-        <TextInput
-          label="Spending Name"
-          value={form.name}
-          onChangeText={(value) => setSpendingFormField(formKey, "name", value)}
-          mode="outlined"
-        />
-        <TextInput
-          label="Amount"
-          value={form.amount}
-          onChangeText={(value) => setSpendingFormField(formKey, "amount", value)}
-          mode="outlined"
-          keyboardType="numeric"
-          style={{ marginTop: 10 }}
-        />
-        <View style={styles.selectorGroup}>
-          <Text style={{ color: "#59616d", marginBottom: 6 }}>Paid By</Text>
-          {usersLoading ? <Text style={{ color: "#59616d" }}>Loading trip users...</Text> : null}
-          <HelperText type="error" visible={!!usersError}>
-            {usersError}
-          </HelperText>
-          {tripUsers.length === 0 && !usersLoading ? (
-            <Text style={{ color: "#59616d" }}>No trip users found.</Text>
-          ) : null}
-          <View style={styles.chipWrap}>
-            {tripUsers.map((tripUser) => {
-              const tripUserId = tripUser?.id;
-
-              return (
-                <Button
-                  key={tripUserId}
-                  mode={selectedPayerId === tripUserId ? "contained" : "outlined"}
-                  onPress={() => setSpendingFormField(formKey, "userId", tripUserId)}
-                  disabled={tripUserId == null}
-                  compact
-                >
-                  {tripUser?.username || `User ${tripUserId}`}
-                </Button>
-              );
-            })}
-          </View>
-        </View>
-        <View style={styles.selectorGroup}>
-          <Text style={{ color: "#59616d", marginBottom: 6 }}>Included Users</Text>
-          <View style={styles.chipWrap}>
-            {tripUsers.map((tripUser) => {
-              const tripUserId = tripUser?.id;
-              const selected = selectedUserIds.includes(tripUserId);
-
-              return (
-                <Button
-                  key={tripUserId}
-                  mode={selected ? "contained" : "outlined"}
-                  onPress={() => toggleIncludedUser(formKey, tripUserId)}
-                  disabled={tripUserId == null}
-                  compact
-                >
-                  {tripUser?.username || `User ${tripUserId}`}
-                </Button>
-              );
-            })}
-          </View>
-        </View>
-        <View style={styles.selectorGroup}>
-          <Text style={{ color: "#59616d", marginBottom: 6 }}>Type</Text>
-          {spendingTypesLoading ? (
-            <Text style={{ color: "#59616d" }}>Loading spending types...</Text>
-          ) : null}
-          <HelperText type="error" visible={!!spendingTypesError}>
-            {spendingTypesError}
-          </HelperText>
-          <View style={styles.chipWrap}>
-            {(spendingTypes.length > 0 ? spendingTypes : [selectedType]).map((type) => (
-              <Button
-                key={type}
-                mode={selectedType === type ? "contained" : "outlined"}
-                onPress={() => setSpendingFormField(formKey, "tripSpendingType", type)}
-                compact
-              >
-                {type}
-              </Button>
-            ))}
-          </View>
-        </View>
-
-        <HelperText type="error" visible={!!error}>
-          {error}
-        </HelperText>
-
-        <Button
-          icon="check"
-          mode="contained"
-          onPress={onSubmit}
-          loading={loading}
-          disabled={loading}
-          style={{ marginTop: 4 }}
-        >
-          {submitLabel}
-        </Button>
-      </SectionPanel>
+      <SpendingForm
+        error={error}
+        form={form}
+        formKey={formKey}
+        getSelectedSpendingType={getSelectedSpendingType}
+        loading={loading}
+        onSubmit={onSubmit}
+        selectedPayerId={selectedPayerId}
+        selectedUserIds={selectedUserIds}
+        setSpendingFormField={setSpendingFormField}
+        spendingTypes={spendingTypes}
+        spendingTypesError={spendingTypesError}
+        spendingTypesLoading={spendingTypesLoading}
+        styles={styles}
+        submitLabel={submitLabel}
+        toggleIncludedUser={toggleIncludedUser}
+        tripUsers={tripUsers}
+        usersError={usersError}
+        usersLoading={usersLoading}
+      />
     );
   };
 
@@ -687,12 +354,12 @@ export default function HomeScreen({ navigation }) {
       <View style={styles.pageHeader}>
         <View style={{ flex: 1 }}>
           <Text variant="headlineSmall" style={styles.pageTitle}>
-            {user?.username ? `Trips for ${user.username}` : "Trips for current user"}
+            {user?.username ? `Chuyến đi của ${user.username}` : "Trips for current user"}
           </Text>
         </View>
         <View style={styles.headerActions}>
           <Button icon="plus" mode="contained" onPress={() => navigation.navigate("AddTrip")}>
-            Add Trip
+            Thêm
           </Button>
         </View>
       </View>
@@ -703,7 +370,7 @@ export default function HomeScreen({ navigation }) {
 
       {myTrips.length === 0 ? (
         <Text style={{ color: "#59616d", marginTop: 8 }}>
-          {loading ? "Loading trips..." : "No trips found."}
+          {loading ? "Đang tải chuyến đi..." : "Không tìm thấy chuyến đi nào  ."}
         </Text>
       ) : (
         myTrips.map((trip, index) => {
@@ -741,72 +408,60 @@ export default function HomeScreen({ navigation }) {
                       {formatValue(trip?.title)}
                     </Text>
                     <Text style={styles.routeText}>
-                      {formatValue(trip?.startLocation)} -> {formatValue(trip?.endLocation)}
+                      {formatValue(trip?.startLocation)} - {formatValue(trip?.endLocation)}
                     </Text>
                   </View>
-                  <IconButton
-                    icon="pencil"
-                    mode="contained-tonal"
-                    onPress={() => navigation.navigate("EditTrip", { tripId })}
-                    disabled={tripId == null}
-                    style={styles.editIconButton}
-                    accessibilityLabel="Edit trip"
-                  />
+                  <View style={styles.tripHeaderActions}>
+                    <IconButton
+                      icon="timeline-clock-outline"
+                      mode="contained-tonal"
+                      onPress={() => navigation.navigate("TripTimeline", { tripId, title: trip?.title })}
+                      disabled={tripId == null}
+                      style={styles.editIconButton}
+                      accessibilityLabel="Xem timeline chuyến đi"
+                    />
+                    <IconButton
+                      icon="pencil"
+                      mode="contained-tonal"
+                      onPress={() => navigation.navigate("EditTrip", { tripId })}
+                      disabled={tripId == null}
+                      style={styles.editIconButton}
+                      accessibilityLabel="Chỉnh sửa chuyến đi"
+                    />
+                  </View>
                 </View>
 
                 <View style={styles.pillGrid}>
                   <InfoPill
-                    label="Status"
+                    label="Trạng thái"
                     value={
                       <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                        <Text style={styles.infoPillValue}>Waiting</Text>
+                        <Text style={styles.infoPillValue}>Chuẩn bị</Text>
                         <MaterialIcons name="hourglass-empty" size={16} color="#3b82f6" />
                       </View>
                     }
                     tone="blue"
+                    styles={styles}
                   />
-                  <InfoPill label="Budget" value={
+                  <InfoPill label="Ngân sách" value={
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
                       <Text style={styles.infoPillValue}>{formatAmount(trip?.budget)}</Text>
                       <MaterialIcons name="attach-money" size={16} color="#3b82f6" />
                     </View>
-                  } tone="green" />
-                  <InfoPill label="Distance" value={
+                  } tone="green" styles={styles} />
+                  <InfoPill label="Khoảng cách" value={
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
                       <Text style={styles.infoPillValue}>{formatValue(trip?.distance) + " km"}</Text>
                       <MaterialIcons name="add-road" size={16} color="#3b82f6" />
                     </View>
-                  } tone="orange" />
-                  <InfoPill label="Start" value={
+                  } tone="orange" styles={styles} />
+                  <InfoPill label="Thời gian bắt đầu" value={
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
                       <Text style={styles.infoPillValue}>{formatDateTimeText(trip?.startTime)}</Text>
                       <MaterialIcons name="timer" size={16} color="#3b82f6" />
                     </View>
-                  } tone="purple" />
+                  } tone="purple" styles={styles} />
                 </View>
-                <View style={styles.tabBar}>
-                  <Button
-                    icon="map-marker-path"
-                    mode={activeTripTab === "stages" ? "contained" : "outlined"}
-                    onPress={() => toggleTripStages(tripId)}
-                    loading={stagesLoading}
-                    disabled={tripId == null || stagesLoading}
-                    style={styles.tabButton}
-                  >
-                    Stages
-                  </Button>
-                  <Button
-                    icon="cash-multiple"
-                    mode={activeTripTab === "spendings" ? "contained" : "outlined"}
-                    onPress={() => toggleTripSpendingsWithoutStage(tripId)}
-                    loading={tripSpendingsWithoutStageLoading}
-                    disabled={tripId == null || tripSpendingsWithoutStageLoading}
-                    style={styles.tabButton}
-                  >
-                    Trip Spendings
-                  </Button>
-                </View>
-
                 {showTripSpendings ? (
                   <Button
                     icon={showTripSpendingForm ? "chevron-up" : "plus"}
@@ -815,7 +470,7 @@ export default function HomeScreen({ navigation }) {
                     disabled={tripId == null}
                     style={styles.fullWidthAction}
                   >
-                    {showTripSpendingForm ? "Hide Form" : "Add Trip Spending"}
+                    {showTripSpendingForm ? "Ẩn form" : "Thêm Chi Tiêu Chuyến Đi"}
                   </Button>
                 ) : null}
 
@@ -826,7 +481,7 @@ export default function HomeScreen({ navigation }) {
                     onSubmit: () => createTripSpending(tripId),
                     loading: createTripSpendingLoading,
                     error: createTripSpendingError,
-                    submitLabel: "Create Trip Spending"
+                    submitLabel: "Tạo chi tiêu chuyến đi"
                   })
                   : null}
 
@@ -841,12 +496,13 @@ export default function HomeScreen({ navigation }) {
                 ) : null}
 
                 {showTripSpendings && tripSpendingsWithoutStage.length > 0 ? (
-                  <SectionPanel title="Trip Spendings" tone="tripSpend">
+                  <SectionPanel title="Trip Spendings" tone="tripSpend" styles={styles}>
                     {tripSpendingsWithoutStage.map((spending, spendingIndex) => (
                       <SpendingCard
                         key={`${spending?.id ?? "trip-spending"}-${spendingIndex}`}
                         spending={spending}
                         tone="trip"
+                        styles={styles}
                       />
                     ))}
                   </SectionPanel>
@@ -865,54 +521,15 @@ export default function HomeScreen({ navigation }) {
                 ) : null}
 
                 {showStages && showStageForm ? (
-                  <SectionPanel title="New Stage" tone="form">
-                    <TextInput
-                      label="Name"
-                      value={stageForm.name}
-                      onChangeText={(value) => setStageFormField(tripId, "name", value)}
-                      mode="outlined"
-                    />
-                    <DateTimeField
-                      label="Start Time"
-                      value={stageForm.startTime}
-                      onChange={(value) => setStageFormField(tripId, "startTime", value)}
-                    />
-                    <DateTimeField
-                      label="End Time"
-                      value={stageForm.endTime}
-                      onChange={(value) => setStageFormField(tripId, "endTime", value)}
-                    />
-                    <TextInput
-                      label="Location"
-                      value={stageForm.location}
-                      onChangeText={(value) => setStageFormField(tripId, "location", value)}
-                      mode="outlined"
-                      style={{ marginTop: 10 }}
-                    />
-                    <TextInput
-                      label="Activity"
-                      value={stageForm.activity}
-                      onChangeText={(value) => setStageFormField(tripId, "activity", value)}
-                      mode="outlined"
-                      multiline
-                      style={{ marginTop: 10 }}
-                    />
-
-                    <HelperText type="error" visible={!!createStageError}>
-                      {createStageError}
-                    </HelperText>
-
-                    <Button
-                      icon="check"
-                      mode="contained"
-                      onPress={() => createStage(tripId)}
-                      loading={createStageLoading}
-                      disabled={createStageLoading}
-                      style={{ marginTop: 4 }}
-                    >
-                      Create Stage
-                    </Button>
-                  </SectionPanel>
+                  <StageForm
+                    createStageError={createStageError}
+                    createStageLoading={createStageLoading}
+                    onCreateStage={() => createStage(tripId)}
+                    setStageFormField={setStageFormField}
+                    stageForm={stageForm}
+                    styles={styles}
+                    tripId={tripId}
+                  />
                 ) : null}
 
                 {showStages ? (
@@ -951,8 +568,8 @@ export default function HomeScreen({ navigation }) {
                         </View>
                       </View>
                       <View style={styles.stageDetails}>
-                        <DetailRow label="Time" value={getStageTime(stage)} />
-                        <DetailRow label="Activity" value={stage?.activity} />
+                        <DetailRow label="Time" value={getStageTime(stage)} styles={styles} />
+                        <DetailRow label="Activity" value={stage?.activity} styles={styles} />
                       </View>
 
                       <View style={styles.secondaryActions}>
@@ -999,12 +616,13 @@ export default function HomeScreen({ navigation }) {
                       ) : null}
 
                       {showStageSpendings && spendings.length > 0 ? (
-                        <SectionPanel title="Stage Spendings" tone="stageSpend">
+                        <SectionPanel title="Stage Spendings" tone="stageSpend" styles={styles}>
                           {spendings.map((spending, spendingIndex) => (
                             <SpendingCard
                               key={`${spending?.id ?? "spending"}-${spendingIndex}`}
                               spending={spending}
                               tone="stage"
+                              styles={styles}
                             />
                           ))}
                         </SectionPanel>
@@ -1089,6 +707,10 @@ const styles = StyleSheet.create({
   },
   tripHeaderText: {
     flex: 1
+  },
+  tripHeaderActions: {
+    flexDirection: "row",
+    gap: 2
   },
   editIconButton: {
     margin: 0
@@ -1224,12 +846,11 @@ const styles = StyleSheet.create({
   },
   secondaryActions: {
     flexDirection: "row",
-    flexWrap: "wrap",
     gap: 10,
     marginTop: 10
   },
   actionButton: {
-    flexGrow: 1
+    flex: 1
   },
   fullWidthAction: {
     marginTop: 12

@@ -2,7 +2,14 @@ import React, { useEffect, useMemo, useState } from "react";
 import { ScrollView, StyleSheet, View } from "react-native";
 import { Button, Card, HelperText, Text, TextInput } from "react-native-paper";
 import { useSelector } from "react-redux";
-import { createTripApi, getTripApi, updateTripApi } from "../api/tripApi";
+import {
+  createTripApi,
+  getTripApi,
+  listTripSelectableUsersApi,
+  listTripUsersApi,
+  updateTripApi
+} from "../api/tripApi";
+import DateTimeField from "../components/home/DateTimeField";
 
 const createEmptyForm = (userId) => ({
   title: "",
@@ -21,6 +28,28 @@ const getEntity = (response) => {
   }
 
   return response;
+};
+
+const getItems = (response) => {
+  const value = response?.data ?? response;
+
+  if (Array.isArray(value)) {
+    return value;
+  }
+
+  if (Array.isArray(value?.content)) {
+    return value.content;
+  }
+
+  if (Array.isArray(value?.items)) {
+    return value.items;
+  }
+
+  if (Array.isArray(value?.results)) {
+    return value.results;
+  }
+
+  return [];
 };
 
 const toInputValue = (value) => (value == null ? "" : String(value));
@@ -42,12 +71,27 @@ const parseNumber = (value) => {
   return trimmed === "" ? null : Number(trimmed);
 };
 
+const formatVND = (value) => {
+  const digits = String(value ?? "").replace(/\D/g, "");
+
+  return digits.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+};
+
+const parseFormattedNumber = (value) => {
+  const digits = String(value ?? "").replace(/\D/g, "");
+
+  return digits === "" ? null : Number(digits);
+};
+
 const parseNumberArray = (value) =>
   String(value ?? "")
     .split(",")
     .map((item) => item.trim())
     .filter(Boolean)
-    .map(Number);
+    .map(Number)
+    .filter(Number.isFinite);
+
+const toUserIdsValue = (ids) => ids.join(", ");
 
 const getErrorMessage = (error) => error?.response?.data?.message || error?.message || "Request failed.";
 
@@ -61,12 +105,51 @@ export default function TripFormScreen({ navigation, route }) {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
+  const [tripUsers, setTripUsers] = useState([]);
+  const [tripUsersLoading, setTripUsersLoading] = useState(false);
+  const [tripUsersError, setTripUsersError] = useState(null);
 
   useEffect(() => {
     if (!isEditing) {
       setForm(initialForm);
     }
   }, [initialForm, isEditing]);
+
+  useEffect(() => {
+    if (isEditing) {
+      return;
+    }
+
+    let active = true;
+
+    const loadSelectableUsers = async () => {
+      setTripUsersLoading(true);
+      setTripUsersError(null);
+      try {
+        const response = await listTripSelectableUsersApi();
+        const users = getItems(response);
+
+        if (active) {
+          setTripUsers(users);
+        }
+      } catch (requestError) {
+        if (active) {
+          setTripUsers(user?.id != null ? [user] : []);
+          setTripUsersError(getErrorMessage(requestError));
+        }
+      } finally {
+        if (active) {
+          setTripUsersLoading(false);
+        }
+      }
+    };
+
+    loadSelectableUsers();
+
+    return () => {
+      active = false;
+    };
+  }, [isEditing, user]);
 
   useEffect(() => {
     if (!isEditing) {
@@ -89,13 +172,17 @@ export default function TripFormScreen({ navigation, route }) {
         setForm({
           title: toInputValue(trip?.title),
           status: toInputValue(trip?.status || "PLANNING"),
-          budget: toInputValue(trip?.budget),
+          budget: formatVND(trip?.budget),
           startLocation: toInputValue(trip?.startLocation),
           endLocation: toInputValue(trip?.endLocation),
           startTime: toInputValue(trip?.startTime),
           distance: toInputValue(trip?.distance),
           userIds: getTripUserIds(trip, user?.id)
         });
+
+        if (Array.isArray(trip?.users)) {
+          setTripUsers(trip.users);
+        }
       } catch (requestError) {
         if (active) {
           setError(getErrorMessage(requestError));
@@ -114,6 +201,44 @@ export default function TripFormScreen({ navigation, route }) {
     };
   }, [isEditing, tripId, user?.id]);
 
+  useEffect(() => {
+    if (!isEditing || tripId == null) {
+      return;
+    }
+
+    let active = true;
+
+    const loadTripUsers = async () => {
+      setTripUsersLoading(true);
+      setTripUsersError(null);
+      try {
+        const response = await listTripUsersApi(tripId);
+        const users = getItems(response);
+
+        if (active) {
+          setTripUsers(users);
+          if (users.length > 0) {
+            setField("userIds", toUserIdsValue(users.map((tripUser) => tripUser?.id).filter((id) => id != null)));
+          }
+        }
+      } catch (requestError) {
+        if (active) {
+          setTripUsersError(getErrorMessage(requestError));
+        }
+      } finally {
+        if (active) {
+          setTripUsersLoading(false);
+        }
+      }
+    };
+
+    loadTripUsers();
+
+    return () => {
+      active = false;
+    };
+  }, [isEditing, tripId]);
+
   const setField = (field, value) => {
     setForm((current) => ({
       ...current,
@@ -121,10 +246,30 @@ export default function TripFormScreen({ navigation, route }) {
     }));
   };
 
+  const toggleUserId = (userId) => {
+    const numericUserId = Number(userId);
+
+    if (!Number.isFinite(numericUserId)) {
+      return;
+    }
+
+    setForm((current) => {
+      const selectedIds = parseNumberArray(current.userIds);
+      const nextIds = selectedIds.includes(numericUserId)
+        ? selectedIds.filter((selectedId) => selectedId !== numericUserId)
+        : [...selectedIds, numericUserId];
+
+      return {
+        ...current,
+        userIds: toUserIdsValue(nextIds)
+      };
+    });
+  };
+
   const buildPayload = () => ({
     title: form.title,
     status: form.status,
-    budget: parseNumber(form.budget),
+    budget: parseFormattedNumber(form.budget),
     startLocation: form.startLocation,
     endLocation: form.endLocation,
     startTime: form.startTime,
@@ -154,15 +299,16 @@ export default function TripFormScreen({ navigation, route }) {
   };
 
   const isBusy = loading || saving;
+  const selectedUserIds = parseNumberArray(form.userIds);
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.screenContent}>
       <View style={styles.hero}>
         <Text variant="headlineSmall" style={styles.heroTitle}>
-          {isEditing ? "Edit Trip" : "Add Trip"}
+          {isEditing ? "Sửa chuyến đi" : "Thêm chuyến đi"}
         </Text>
         <Text style={styles.heroSubtitle}>
-          {isEditing ? "Update route, budget, dates, and participants." : "Set up the route, budget, dates, and participants."}
+          {isEditing ? "Cập nhật lộ trình, ngân sách, ngày tháng và người tham gia." : "Thiết lập lộ trình, ngân sách, ngày tháng và người tham gia."}
         </Text>
       </View>
 
@@ -171,39 +317,34 @@ export default function TripFormScreen({ navigation, route }) {
           <View style={styles.sectionHeader}>
             <View style={styles.sectionAccent} />
             <Text variant="titleMedium" style={styles.sectionTitle}>
-              Trip Details
+              Chi tiết chuyến đi
             </Text>
           </View>
           <TextInput
-            label="Title"
+            label="Tiêu đề"
             value={form.title}
             onChangeText={(value) => setField("title", value)}
             mode="outlined"
           />
           <TextInput
-            label="Status"
-            value={form.status}
-            onChangeText={(value) => setField("status", value)}
-            mode="outlined"
-            style={{ marginTop: 12 }}
-          />
-          <TextInput
-            label="Budget"
+            label="Ngân sách"
             value={form.budget}
-            onChangeText={(value) => setField("budget", value)}
+            onChangeText={(value) =>
+              setField("budget", formatVND(value))
+            }
             mode="outlined"
             keyboardType="numeric"
             style={{ marginTop: 12 }}
           />
           <TextInput
-            label="Start Location"
+            label="Địa điểm bắt đầu"
             value={form.startLocation}
             onChangeText={(value) => setField("startLocation", value)}
             mode="outlined"
             style={{ marginTop: 12 }}
           />
           <TextInput
-            label="End Location"
+            label="Địa điểm kết thúc"
             value={form.endLocation}
             onChangeText={(value) => setField("endLocation", value)}
             mode="outlined"
@@ -214,31 +355,49 @@ export default function TripFormScreen({ navigation, route }) {
               {form.startLocation || "Start"} -> {form.endLocation || "End"}
             </Text>
           </View>
-          <TextInput
-            label="Start Time"
+          <DateTimeField
+            label="Thời gian bắt đầu"
             value={form.startTime}
-            onChangeText={(value) => setField("startTime", value)}
-            mode="outlined"
-            placeholder="2026-06-01T08:00:00"
-            style={{ marginTop: 12 }}
+            onChange={(value) => setField("startTime", value)}
           />
           <TextInput
-            label="Distance"
+            label="Khoảng cách"
             value={form.distance}
             onChangeText={(value) => setField("distance", value)}
             mode="outlined"
             keyboardType="numeric"
             style={{ marginTop: 12 }}
           />
-          <TextInput
-            label="User IDs"
-            value={form.userIds}
-            onChangeText={(value) => setField("userIds", value)}
-            mode="outlined"
-            placeholder={user?.id != null ? String(user.id) : "1, 2"}
-            style={{ marginTop: 12 }}
-          />
-          <Text style={styles.helperCopy}>Use comma-separated user ids until a full user picker is available here.</Text>
+          <View style={styles.selectorGroup}>
+            <Text style={styles.selectorLabel}>Người tham gia chuyến đi</Text>
+            {tripUsersLoading ? (
+              <Text style={styles.helperCopy}>Đang tải người dùng...</Text>
+            ) : null}
+            <HelperText type="error" visible={!!tripUsersError}>
+              {tripUsersError}
+            </HelperText>
+            {tripUsers.length === 0 && !tripUsersLoading ? (
+              <Text style={styles.helperCopy}>Không tìm thấy người dùng nào.</Text>
+            ) : null}
+            <View style={styles.chipWrap}>
+              {tripUsers.map((tripUser) => {
+                const tripUserId = tripUser?.id;
+                const selected = selectedUserIds.includes(Number(tripUserId));
+
+                return (
+                  <Button
+                    key={tripUserId}
+                    mode={selected ? "contained" : "outlined"}
+                    onPress={() => toggleUserId(tripUserId)}
+                    disabled={tripUserId == null || isBusy}
+                    compact
+                  >
+                    {tripUser?.username || `User ${tripUserId}`}
+                  </Button>
+                );
+              })}
+            </View>
+          </View>
 
           <HelperText type="error" visible={!!error}>
             {error}
@@ -246,10 +405,10 @@ export default function TripFormScreen({ navigation, route }) {
 
           <View style={styles.actions}>
             <Button icon="check" mode="contained" onPress={saveTrip} loading={saving} disabled={isBusy} style={{ flex: 1 }}>
-              {isEditing ? "Update Trip" : "Create Trip"}
+              {isEditing ? "Sửa" : "Thêm"}
             </Button>
             <Button icon="close" mode="outlined" onPress={() => navigation.goBack()} disabled={isBusy} style={{ flex: 1 }}>
-              Cancel
+              Hủy
             </Button>
           </View>
         </Card.Content>
@@ -320,6 +479,18 @@ const styles = StyleSheet.create({
   helperCopy: {
     color: "#64748b",
     marginTop: 8
+  },
+  selectorGroup: {
+    marginTop: 12
+  },
+  selectorLabel: {
+    color: "#59616d",
+    marginBottom: 6
+  },
+  chipWrap: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8
   },
   actions: {
     flexDirection: "row",
